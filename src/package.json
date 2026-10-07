@@ -1,0 +1,6 @@
+{
+  "name": "study-desk-src",
+  "private": true,
+  "scripts": { "build": "node build.js" },
+  "devDependencies": { "esbuild": "^0.24.2" }
+}
