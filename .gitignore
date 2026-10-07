@@ -3,3 +3,4 @@ src/build/
 .vercel/
 .DS_Store
 Thumbs.db
+src/week3-tasks.json
