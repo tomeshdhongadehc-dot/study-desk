@@ -6,6 +6,10 @@ Built for a learner who tires easily: 25-minute blocks, a one-tap **low-energy d
 
 ![Today view, dark theme](docs/screenshots/today-dark.png)
 
+| Quiz me (example answers) | Report | Trophies |
+|---|---|---|
+| ![Quiz graded by Claude](docs/screenshots/quiz.png) | ![Report](docs/screenshots/report.png) | ![Trophies](docs/screenshots/trophies.png) |
+
 | Light theme | Quest reader | Calendar | Mobile |
 |---|---|---|---|
 | ![Light theme](docs/screenshots/today-light.png) | ![Reader](docs/screenshots/reader.png) | ![Calendar drawer](docs/screenshots/calendar.png) | ![Mobile](docs/screenshots/mobile.png) |
