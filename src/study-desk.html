@@ -529,6 +529,18 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13px}
 .quiz .q:first-of-type{border-top:0;padding-top:0}
 .quiz .q p{margin:0;font:500 18px/1.45 var(--f-read)}
 .quiz .q small{color:var(--muted);font-size:12.5px}
+.qtype{font:600 10.5px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--violet)}
+.opts{display:grid;gap:8px}
+.opt{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;padding:11px 14px;border-radius:14px;border:1px solid var(--stroke);background:rgb(var(--tint) / .04);font:400 16px/1.45 var(--f-read);color:var(--ink);transition:border-color .2s,background-color .2s,transform .25s var(--spring)}
+.opt:hover:not(:disabled){border-color:var(--violet);background:rgba(143,114,255,.1);transform:translateX(3px)}
+.opt:disabled{cursor:default}
+.opt-l{flex:0 0 auto;width:24px;height:24px;margin-top:1px;border-radius:8px;display:grid;place-items:center;font:700 12px/1 var(--f-mono);background:rgb(var(--tint) / .1);color:var(--muted);transition:background-color .2s,color .2s}
+.opt.sel{border-color:var(--violet);background:rgba(143,114,255,.16)}
+.opt.sel .opt-l{background:var(--violet);color:#fff}
+.opt.right{border-color:var(--teal);background:rgba(46,224,198,.14)}
+.opt.right .opt-l{background:var(--teal);color:#06121A}
+.opt.wrong{border-color:var(--bad);background:rgba(255,107,122,.12)}
+.opt.wrong .opt-l{background:var(--bad);color:#fff}
 .quiz textarea{font:400 16px/1.5 var(--f-read);color:var(--ink);background:var(--well);border:1px solid var(--stroke);border-radius:12px;padding:10px 12px;width:100%;min-height:72px;resize:vertical}
 .quiz textarea:focus{outline:none;border-color:var(--violet);box-shadow:0 0 0 4px rgba(143,114,255,.18)}
 .quiz .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -1306,24 +1318,40 @@ function endBreak(finished){
 /* ============ quiz ============ */
 const QUIZ_ERR={rate_limited:'Claude is busy right now. Try again in a minute.',invalid_json:'That reply came back garbled. Try again.',refused:'Claude could not make a quiz for this one. Try again.',empty_completion:'Claude sent an empty reply. Try again.',session_expired:'Your claude.ai session expired. Sign in again, then retry.'};
 const QUIZ_OFF=['not_granted','sampling_disabled','not_declared','capability_disabled','capability_removed'];
+const LETTERS='ABCDE';
 function canQuiz(t){return t&&t.kind!=='action'&&t.kind!=='own'&&!!t.topic;}
+function optsHTML(q,i,st,id,done){
+  return `<div class="opts" role="radiogroup" aria-label="Options for question ${i+1}">${q.options.map((o,k)=>{
+    let c='';if(st.answers[i]===k) c+=' sel';if(done){if(k===q.answer) c+=' right';else if(st.answers[i]===k) c+=' wrong';}
+    return `<button type="button" class="opt${c}" ${done?'disabled':''} role="radio" aria-checked="${st.answers[i]===k}" data-act="quizopt" data-id="${esc(id)}" data-i="${i}" data-k="${k}"><span class="opt-l">${LETTERS[k]}</span><span>${esc(o)}</span></button>`;}).join('')}</div>`;
+}
 function quizHTML(t){
-  const st=S.quiz[t.id]||{phase:'idle'},past=S.quizzes.filter(q=>q.taskId===t.id&&q.max),best=past.reduce((m,q)=>Math.max(m,q.points),-1),bestMax=past.length?past[0].max:0;
-  const head=`<h4>Quiz me${best>=0?` · best ${best}/${bestMax}`:''}</h4>`;
+  const st=S.quiz[t.id]||{phase:'idle'},past=S.quizzes.filter(q=>q.taskId===t.id&&q.max);
+  const bestQ=past.reduce((b,q)=>!b||q.points/q.max>b.points/b.max?q:b,null);
+  const head=`<h4>Quiz me${bestQ?` · best ${bestQ.points}/${bestQ.max}`:''}</h4>`;
   if(!S.sample) return head+`<p>Quizzes run in the claude.ai version of Study Desk, where Claude writes and grades the questions.</p>`;
-  if(st.phase==='idle') return head+`<p>Claude asks 3 quick recall questions about this topic, then checks your answers and explains anything you missed. Up to +60 XP.</p><div class="row"><button class="btn cool" data-act="quiz" data-id="${esc(t.id)}">Start quiz</button></div>`;
-  if(st.phase==='loading'||st.phase==='grading') return head+`<div class="row"><span class="thinking"><span class="dots"><i></i><i></i><i></i></span>${st.phase==='loading'?'Claude is writing your questions…':'Claude is checking your answers…'}</span><button class="btn ghost" data-act="quizstop" data-id="${esc(t.id)}">Stop</button></div>`;
+  if(st.phase==='idle') return head+`<p>A 5-question quiz on this topic: 3 multiple choice, checked instantly, and 2 short answers that Claude grades and explains. Up to +100 XP.</p><div class="row"><button class="btn cool" data-act="quiz" data-id="${esc(t.id)}">Start quiz</button></div>`;
+  if(st.phase==='loading'||st.phase==='grading') return head+`<div class="row"><span class="thinking"><span class="dots"><i></i><i></i><i></i></span>${st.phase==='loading'?'Claude is writing your quiz…':'Claude is checking your short answers…'}</span><button class="btn ghost" data-act="quizstop" data-id="${esc(t.id)}">Stop</button></div>`;
   if(st.phase==='error') return head+`<p>${esc(st.err)}</p><div class="row"><button class="btn cool" data-act="quiz" data-id="${esc(t.id)}">Try again</button></div>`;
-  if(st.phase==='answer') return head+st.qs.map((q,i)=>`<div class="q"><p data-q="${i}">${esc(q.q)}</p>${q.hint?`<small>Hint: ${esc(q.hint)}</small>`:''}<textarea data-qa="${i}" data-id="${esc(t.id)}" aria-label="Your answer to question ${i+1}">${esc(st.answers[i]||'')}</textarea></div>`).join('')
-    +`<div class="row"><button class="btn hot" data-act="quizcheck" data-id="${esc(t.id)}">Check my answers</button><button class="btn ghost" data-act="quiznew" data-id="${esc(t.id)}">New questions</button></div>`;
-  return head+st.qs.map((q,i)=>{const r=st.results[i]||{},sc=Math.max(0,Math.min(2,Number(r.score)||0));return `<div class="q"><p>${esc(q.q)}</p><p class="your">${esc(st.answers[i]||'(blank)')}</p><span class="verdict v${sc}">${sc===2?'Correct':sc===1?'Partly right':'Missed'}</span><p class="fb" data-fb="${i}">${esc(r.feedback||'')}</p>${r.ideal?`<p class="fb"><b>Model answer:</b> ${esc(r.ideal)}</p>`:''}</div>`;}).join('')
-    +`<div class="row"><span class="score">${st.points}/${st.max}</span><span class="muted" id="quizSum">${esc(st.summary||'')}</span></div><div class="row"><button class="btn cool" data-act="quiznew" data-id="${esc(t.id)}">Try new questions</button></div>`;
+  const n=st.qs.length,done=st.phase==='done';
+  const body=st.qs.map((q,i)=>{
+    const tag=`<span class="qtype">${q.type==='mcq'?'Multiple choice':'Short answer'} · ${i+1}/${n}</span>`;
+    if(!done){
+      return `<div class="q">${tag}<p data-q="${i}">${esc(q.q)}</p>${q.type==='mcq'?optsHTML(q,i,st,t.id,false)
+        :`${q.hint?`<small>Hint: ${esc(q.hint)}</small>`:''}<textarea data-qa="${i}" data-id="${esc(t.id)}" aria-label="Your answer to question ${i+1}">${esc(st.answers[i]||'')}</textarea>`}</div>`;
+    }
+    const r=st.results[i]||{},sc=Math.max(0,Math.min(2,Number(r.score)||0));
+    if(q.type==='mcq') return `<div class="q">${tag}<p>${esc(q.q)}</p>${optsHTML(q,i,st,t.id,true)}<span class="verdict v${sc}">${sc===2?'Correct':st.answers[i]==null?'Skipped':'Not quite'}</span>${q.why?`<p class="fb" data-fb="${i}">${esc(q.why)}</p>`:''}</div>`;
+    return `<div class="q">${tag}<p>${esc(q.q)}</p><p class="your">${esc(st.answers[i]||'(blank)')}</p><span class="verdict v${sc}">${sc===2?'Correct':sc===1?'Partly right':'Missed'}</span><p class="fb" data-fb="${i}">${esc(r.feedback||'')}</p>${r.ideal?`<p class="fb"><b>Model answer:</b> ${esc(r.ideal)}</p>`:''}</div>`;
+  }).join('');
+  if(!done) return head+body+`<div class="row"><button class="btn hot" data-act="quizcheck" data-id="${esc(t.id)}">Check my answers</button><button class="btn ghost" data-act="quiznew" data-id="${esc(t.id)}">New questions</button></div>`;
+  return head+body+`<div class="row"><span class="score">${st.points}/${st.max}</span><span class="muted" id="quizSum">${esc(st.summary||'')}</span></div><div class="row"><button class="btn cool" data-act="quiznew" data-id="${esc(t.id)}">Try new questions</button></div>`;
 }
 function paintQuiz(id,typed){
   const box=$('quizBox'),t=S.tasks.find(x=>x.id===id);if(!box||S.openId!==id||!t) return;
   box.innerHTML=quizHTML(t);
-  if(typed==='q') box.querySelectorAll('[data-q]').forEach((p,i)=>setTimeout(()=>typeInto(p,p.textContent),i*350));
-  if(typed==='r'){box.querySelectorAll('[data-fb]').forEach((p,i)=>setTimeout(()=>typeInto(p,p.textContent),i*300));const s=$('quizSum');if(s) setTimeout(()=>typeInto(s,s.textContent),900);}
+  if(typed==='q') box.querySelectorAll('[data-q]').forEach((p,i)=>setTimeout(()=>typeInto(p,p.textContent),i*300));
+  if(typed==='r'){box.querySelectorAll('[data-fb]').forEach((p,i)=>setTimeout(()=>typeInto(p,p.textContent),i*260));const s=$('quizSum');if(s) setTimeout(()=>typeInto(s,s.textContent),1100);}
 }
 function quizFail(id,e){
   const st=S.quiz[id];if(!st) return;const c=e&&e.code;
@@ -1331,46 +1359,73 @@ function quizFail(id,e){
   if(QUIZ_OFF.includes(c)){S.sample=null;S.quiz[id]={phase:'idle'};paintQuiz(id);return;}
   st.phase='error';st.err=QUIZ_ERR[c]||'Could not reach Claude. Check your connection and try again.';paintQuiz(id);
 }
+/* Keep only well-formed questions; shuffle multiple-choice options so the answer position carries no hint. */
+function cleanQuestions(raw){
+  const out=[];
+  for(const q of Array.isArray(raw)?raw:[]){
+    if(!q||typeof q.q!=='string'||!q.q.trim()) continue;
+    if(q.type==='mcq'){
+      const opts=Array.isArray(q.options)?q.options.filter(o=>typeof o==='string'&&o.trim()).map(o=>o.trim()):[];
+      const ans=Number(q.answer);
+      if(opts.length<3||opts.length>5||!Number.isInteger(ans)||ans<0||ans>=opts.length) continue;
+      const order=opts.map((_,i)=>i);for(let i=order.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
+      out.push({type:'mcq',q:q.q.trim(),options:order.map(i=>opts[i]),answer:order.indexOf(ans),why:typeof q.why==='string'?q.why.trim():''});
+    }else out.push({type:'short',q:q.q.trim(),hint:typeof q.hint==='string'?q.hint.trim():''});
+  }
+  return out.slice(0,6);
+}
 async function runQuiz(id,fresh){
   const t=S.tasks.find(x=>x.id===id);if(!S.sample||!t) return;
   const ctl=new AbortController();const st=S.quiz[id]={phase:'loading',ctl};paintQuiz(id);
   const notes=t.proof&&t.proof.note?`\nThe learner's own notes after studying: """${String(t.proof.note).slice(0,800)}"""`:'';
   const prompt=`You are a friendly system design tutor for a junior engineer who builds the accounting module ("Books") of an ERP suite with Spring Boot, NestJS, Postgres and Kafka.
-Write 3 short recall questions that test the most important ideas of this study task. Each must be answerable from memory in 1-3 sentences. Make one a "what or why" question, one a "how would you" question applied to the ERP or accounting context, and one about a trade-off or failure case.
+Write a 5-question quiz on the most important ideas of this study task.
+Questions 1-3: multiple choice. Each has exactly 4 short options with exactly one correct answer; make the wrong options plausible, based on common misconceptions. Add a one-sentence explanation of why the correct answer is right.
+Questions 4-5: short answer, answerable from memory in 1-3 sentences. Make one a "how would you" question applied to the ERP or accounting context, and one about a trade-off or failure case.
 Topic: ${t.topic}
 Task: ${t.title}
 Why it matters: ${t.why||''}
 Steps: ${(t.steps||[]).join(' | ')}${notes}
-Reply with only JSON in exactly this shape: {"questions":[{"q":"question text","hint":"a 3-8 word nudge"}]}`;
+Reply with only JSON in exactly this shape:
+{"questions":[{"type":"mcq","q":"question","options":["A","B","C","D"],"answer":0,"why":"one sentence"},{"type":"short","q":"question","hint":"a 3-8 word nudge"}]}
+"answer" is the 0-based index of the correct option.`;
   const opts={modelTier:'quick',signal:ctl.signal};if(fresh) opts.cache=false;
   try{
     const r=await S.sample.json(prompt,opts);
-    const qs=(r&&Array.isArray(r.questions)?r.questions:[]).filter(q=>q&&typeof q.q==='string'&&q.q.trim()).slice(0,3).map(q=>({q:q.q.trim(),hint:typeof q.hint==='string'?q.hint.trim():''}));
+    const qs=cleanQuestions(r&&r.questions);
     if(!qs.length) throw {code:'invalid_json'};
-    Object.assign(st,{phase:'answer',qs,answers:qs.map(()=>'')});paintQuiz(id,'q');
-    const first=document.querySelector('#quizBox textarea');if(first) setTimeout(()=>first.focus({preventScroll:true}),qs.length*350+200);
+    Object.assign(st,{phase:'answer',qs,answers:qs.map(q=>q.type==='mcq'?null:'')});paintQuiz(id,'q');
   }catch(e){quizFail(id,e);}
 }
 async function checkQuiz(id){
   const t=S.tasks.find(x=>x.id===id),st=S.quiz[id];if(!S.sample||!t||!st||!st.qs) return;
-  if(st.answers.every(a=>!a.trim())){toast('Write at least one answer first. A guess is fine.');return;}
-  const ctl=new AbortController();st.ctl=ctl;st.phase='grading';paintQuiz(id);
-  const prompt=`You are grading a junior engineer's recall answers about "${t.topic}" (system design). Be accurate but encouraging. Score each answer: 2 = correct and complete enough, 1 = partly right or missing a key point, 0 = wrong or blank. Give one or two sentences of feedback naming what was right and what was missing, and a model answer in at most two sentences.
+  if(st.answers.every(a=>a==null||(typeof a==='string'&&!a.trim()))){toast('Answer at least one question first. A guess is fine.');return;}
+  const results=st.qs.map((q,i)=>q.type==='mcq'?{score:st.answers[i]===q.answer?2:0}:null);
+  const shortIdx=st.qs.map((q,i)=>q.type==='short'?i:-1).filter(i=>i>=0);
+  if(shortIdx.length){
+    const ctl=new AbortController();st.ctl=ctl;st.phase='grading';paintQuiz(id);
+    const prompt=`You are grading a junior engineer's short recall answers about "${t.topic}" (system design). Be accurate but encouraging. Score each answer: 2 = correct and complete enough, 1 = partly right or missing a key point, 0 = wrong or blank. Give one or two sentences of feedback naming what was right and what was missing, and a model answer in at most two sentences.
 
-${st.qs.map((q,i)=>`Q${i+1}: ${q.q}\nAnswer ${i+1}: ${st.answers[i].trim()||'(blank)'}`).join('\n\n')}
+${shortIdx.map((qi,k)=>`Q${k+1}: ${st.qs[qi].q}\nAnswer ${k+1}: ${String(st.answers[qi]||'').trim()||'(blank)'}`).join('\n\n')}
 
-Reply with only JSON in exactly this shape: {"results":[{"score":2,"feedback":"...","ideal":"..."}],"summary":"one encouraging sentence naming the single most useful thing to review"}`;
-  try{
-    const r=await S.sample.json(prompt,{modelTier:'quick',signal:ctl.signal,cache:false});
-    const res=(r&&Array.isArray(r.results)?r.results:[]).slice(0,st.qs.length);
-    if(res.length!==st.qs.length) throw {code:'invalid_json'};
-    const points=res.reduce((s,x)=>s+Math.max(0,Math.min(2,Number(x&&x.score)||0)),0),max=st.qs.length*2;
-    Object.assign(st,{phase:'done',results:res,summary:r&&typeof r.summary==='string'?r.summary:'',points,max});
-    paintQuiz(id,'r');
-    try{await Store.addQuiz({taskId:id,topic:t.topic,at:new Date().toISOString(),points,max});}catch(_){toast('Quiz result could not be saved.');}
-    const b=document.querySelector('#quizBox .score');if(b){const rr=b.getBoundingClientRect();if(points) floatText(rr.left+rr.width/2,rr.top,'+'+points*10+' XP');if(points===max){FX.burst(rr.left+rr.width/2,rr.top,90,.9);chime('win');}else chime('soft');}
-    renderHeader();checkBadges();
-  }catch(e){quizFail(id,e);}
+Reply with only JSON in exactly this shape, one result per question in order: {"results":[{"score":2,"feedback":"...","ideal":"..."}],"summary":"one encouraging sentence naming the single most useful thing to review"}`;
+    try{
+      const r=await S.sample.json(prompt,{modelTier:'quick',signal:ctl.signal,cache:false});
+      const res=(r&&Array.isArray(r.results)?r.results:[]);
+      if(res.length<shortIdx.length) throw {code:'invalid_json'};
+      shortIdx.forEach((qi,k)=>{results[qi]=res[k]||{score:0};});
+      st.summary=r&&typeof r.summary==='string'?r.summary:'';
+    }catch(e){quizFail(id,e);return;}
+  }else{
+    const wrong=st.qs.filter((q,i)=>results[i].score<2).length;
+    st.summary=wrong?`Re-read the explanation${wrong>1?'s':''} for the one${wrong>1?'s':''} you missed.`:'Perfect score. Nicely done.';
+  }
+  const points=results.reduce((s,x)=>s+Math.max(0,Math.min(2,Number(x&&x.score)||0)),0),max=st.qs.length*2;
+  Object.assign(st,{phase:'done',results,points,max});
+  paintQuiz(id,'r');
+  try{await Store.addQuiz({taskId:id,topic:t.topic,at:new Date().toISOString(),points,max});}catch(_){toast('Quiz result could not be saved.');}
+  const b=document.querySelector('#quizBox .score');if(b){const rr=b.getBoundingClientRect();if(points) floatText(rr.left+rr.width/2,rr.top,'+'+points*10+' XP');if(points===max){FX.burst(rr.left+rr.width/2,rr.top,90,.9);chime('win');}else chime('soft');}
+  renderHeader();checkBadges();
 }
 function quizzesChanged(){if(!S.loaded) return;renderHeader();renderView();checkBadges();}
 
@@ -1428,6 +1483,7 @@ document.addEventListener('click',async e=>{
   else if(a==='quiznew') runQuiz(b.dataset.id,true);
   else if(a==='quizstop'){const st=S.quiz[b.dataset.id];if(st&&st.ctl) st.ctl.abort();}
   else if(a==='quizcheck') checkQuiz(b.dataset.id);
+  else if(a==='quizopt'){const st=S.quiz[b.dataset.id];if(st&&st.phase==='answer'){st.answers[Number(b.dataset.i)]=Number(b.dataset.k);b.parentElement.querySelectorAll('.opt').forEach(o=>{const on=o===b;o.classList.toggle('sel',on);o.setAttribute('aria-checked',String(on));});chime('tick');}}
   else if(a==='break') startBreak();
   else if(a==='endbreak') endBreak(false);
   else if(a==='snackx') hideSnack();

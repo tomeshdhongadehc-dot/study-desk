@@ -24,7 +24,7 @@ Built for a learner who tires easily: 25-minute blocks, a one-tap **low-energy d
 - **XP, levels and streaks**: +50 XP on-time bonus, levels from Intern to Architect, confetti, a day-cleared screen and level-up effects.
 - **Journey calendar** in a slide-out drawer; picking a day updates the whole header.
 - **Low-energy mode** that shows just one quest.
-- **Quiz me**: Claude writes three recall questions for a topic, grades your answers and explains what you missed (+10 XP per point). Runs in the claude.ai version.
+- **Quiz me**: a 5-question quiz per topic: 3 multiple choice checked instantly, plus 2 short answers Claude grades and explains (+10 XP per point, up to +100). Runs in the claude.ai version.
 - **18 achievement badges** with unlock animations and a trophy shelf.
 - **Breaks and reminders**: a five-minute breathing break after a focus session, plus a repeating calendar reminder (Google Calendar link or `.ics`).
 - **Report**: XP per day chart with tooltips and a table view, focus minutes, on-time rate, topic mastery, and every proof note collected as a revision sheet.
